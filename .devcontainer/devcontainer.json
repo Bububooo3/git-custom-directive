@@ -1,0 +1,12 @@
+{
+	"name": "Ubuntu",
+	"image": "mcr.microsoft.com/devcontainers/base:noble",
+	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y lua5.4 liblua5.4-dev luarocks",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"JohnnyMorganz.luau-lsp"
+			]
+		}
+	}
+}
