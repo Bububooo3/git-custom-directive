@@ -56,10 +56,38 @@ end
 
 					token: "12345678910";
 					repository: "username/reponame";
-					path: ""; --<prefixes: ./, /, nothing>
+					path: "";
 					branch: "main";
 					output-enabled: false;
 					commit-message: "We did it!";
+				};
+			</files>
+		];
+
+		git-pull = [
+			<config>
+				token: [TOKEN];
+				repository: [REPO];
+				path: [GITHUB PATH];
+				branch: [BRANCH];
+				output-enabled: [OUTPUT ENABLED];
+			</config>
+
+			<files>
+				workspace.Script: {
+					token: "12345678910";
+					repository: "username/reponame";
+					path: "";
+					branch: "main";
+					output-enabled: false;
+				};
+
+				workspace.Folder: {
+					token: "12345678910";
+					repository: "username/reponame";
+					path: "";
+					branch: "main";
+					output-enabled: false;
 				};
 			</files>
 		];

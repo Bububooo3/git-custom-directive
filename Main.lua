@@ -26,50 +26,17 @@
 
 ]]
 
-----> Convert data from base 10 to base 64
-function to_base64(data: any) : string -- (XDeltaXen) - https://devforum.roblox.com/t/base64-encoding-and-decoding-in-lua/1719860
-	local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-	return ((data:gsub('.', function(x) 
-		local r,b='',x:byte()
-		for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
-		return r;
-	end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
-		if (#x < 6) then return '' end
-		local c=0
-		for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
-		return b:sub(c+1,c+1)
-	end)..({ '', '==', '=' })[#data%3+1])
-end
 
-type GitConfigData = {
-	token: string | nil;
-	repository: string | nil;
-	path: string | nil;
-	branch: string | nil;
-	message: string | nil;
-	base: string;
-}
+local Types = require("./Types")
+local Functions = require("./Functions")
 
-type GitDirectiveData = {
-	config: GitConfigData,
-
-	files: { -- [script absolute file path from game]: {upload data}
-		[string]: {
-			name: string | nil;
-			token: string | nil;
-			repository: string | nil;
-			path: string | nil;
-			branch: string | nil;
-			message: string | nil;
-		}
-	}
-}
-
-local gitConfigGlobal: GitConfigData = {base='main'}
+local gitConfigGlobal: Types.GitConfigData = {base='main'}
 local baseURL = "https://api.github.com/repos/%s/contents/%s"
 local HttpService = game:GetService("HttpService")
 
-function gitPush(data: GitDirectiveData)
+local main = {}
+
+function main.gitPush(data: Types.GitDirectiveData)
 	-- post parsing
 
 	local gitConfigLocal = data.config
@@ -77,7 +44,7 @@ function gitPush(data: GitDirectiveData)
 	for path, file in pairs(data.files) do
 		local split = path:split(".") -- {game, Workspace, ModelName, PartName, ScriptName}
 
-		local name = file.name or split[#split] -- will have issues if there are stars in the instance names
+		local name = file.name or split[#split] -- will have issues if there are periods in the instance names
 		local repository = file.repository or gitConfigLocal.repository or gitConfigGlobal.repository or nil
 		local token = file.token or gitConfigLocal.token or gitConfigGlobal.token or nil
 		local filePath = file.path or gitConfigLocal.path or gitConfigGlobal.path or ""
@@ -204,7 +171,7 @@ function gitPush(data: GitDirectiveData)
 					Headers = headers,
 					Body = HttpService:JSONEncode({
 						message = msg;
-						content = to_base64(fileObject.Source);
+						content = Functions.to_base64(fileObject.Source);
 						branch = branch;
 						sha = mySHA
 				})
@@ -219,3 +186,87 @@ function gitPush(data: GitDirectiveData)
 		-- End of finally tryna push the stuff
 	end
 end
+
+function main.gitPull(data: Types.GitDirectiveData)
+	local gitConfigLocal = data.config
+
+	for path, file in pairs(data.files) do
+		-- INITIALIZATION
+		local split = path:split(".") -- {game, Workspace, ModelName, PartName, ScriptName}
+
+		local name = file.name or split[#split] -- will have issues if there are periods in the instance names
+		local repository = file.repository or gitConfigLocal.repository or gitConfigGlobal.repository or nil
+		local token = file.token or gitConfigLocal.token or gitConfigGlobal.token or nil
+		local filePath = file.path or gitConfigLocal.path or gitConfigGlobal.path or ""
+		local branch = file.branch or gitConfigLocal.branch or gitConfigGlobal.branch or "main"
+
+		local url = baseURL:format(repository, filePath)..`?ref={branch}`
+		local headers = {
+			["Authorization"] = `token {token}`,
+			["Accept"] = "application/vnd.github.v3+json"
+		}
+
+		-- Guards
+		local issues = 0
+		if not repository then
+			warn(`(git-pull) No repository specified for file {name}`)
+			issues += 1
+		end
+
+		if not token then
+			warn(`(git-pull) No token specified for file {name}`)
+			issues += 1
+		end
+
+		if issues > 0 then return end
+		-- End of Guards
+		-- END OF INITIALIZATION
+
+		-- Find real instance referenced
+		local root = split[1]
+		local fileObject
+
+		if root == "game" then
+			fileObject = game
+			table.remove(split, 1)
+		elseif root == "script" then
+			fileObject = script
+		elseif game:FindFirstChild(root) then
+			fileObject = game
+		else
+			warn(`(git-pull) Invalid path for file {name}`)
+		end
+
+		for i, t in ipairs(split) do
+			fileObject = fileObject[t] or nil
+		end
+
+		if not fileObject:IsA("BaseScript") then 
+			warn(`(git-pull) Invalid instance for file {name}`)
+			return
+		end
+		-- End of finding real script instance
+
+		-- Do the actual getting
+		local success1, result1 = pcall(function()
+			return HttpService:RequestAsync({
+				Url = url,
+				Method = "GET",
+				Headers = headers
+			})
+		end)
+
+		if success1 and not result1.Success then
+			warn(`(git-pull) Failed to fetch repository contents for file {name}: `.. result1.Body)
+			return
+		elseif not success1 then
+			warn(`(git-pull) Failed to fetch repository contents for file {name}: (no data)`)
+			return
+		end
+
+		local contents = HttpService:JSONDecode(result1.Body)
+		-- End of doing the actual getting
+	end
+end
+
+return main
