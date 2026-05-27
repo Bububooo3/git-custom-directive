@@ -1,90 +1,8 @@
+--!native
+--!optimize 2
 local HttpService = game:GetService("HttpService")
+local Selection = game:GetService("Selection")
 local Functions = {}
-
-----> Return the contents of a repository
-function Functions.getRepoContents(repository, name, path, headers, branch)
-	local url = "https://api.github.com/repos/" .. plugin:GetSetting(Gitsync.Settings.REPOSITORY) .. "/contents/" .. (path or "") .."?ref="..plugin:GetSetting(Gitsync.Settings.BRANCH)
-
-	local url = baseURL:format(repository, path)..`?ref={branch}`
-	local headers = {
-		["Authorization"] = `token {token}`,
-		["Accept"] = "application/vnd.github.v3+json"
-	}
-
-	local success1, result1 = pcall(function()
-			return HttpService:RequestAsync({
-				Url = url,
-				Method = "GET",
-				Headers = headers
-			})
-		end)
-
-	if success1 and not result1.Success then
-		warn(`(git-pull) Failed to fetch repository contents for file {name}: `.. result1.Body)
-		return
-	elseif not success1 then
-		warn(`(git-pull) Failed to fetch repository contents for file {name}: (no data)`)
-		return
-	end
-
-    return HttpService:JSONDecode(result1.Body)
-end
-
-function Functions.createStructure(parent: any, contents: any) : nil
-	local new_directiories: {Folder} = {}
-	
-	for _, item in pairs(contents) do
-		local notService = not(game:FindFirstChild(item.name))
-		if item.type == "dir" then
-			if tOE then if notService then print("dir") else print("service") end end
-
-			local folder: any
-
-			if notService then
-				folder = Instance.new("Folder")
-				folder.Name, folder.Parent = item.name, parent
-				table.insert(new_directiories, folder)
-			else folder = game[item.name] end
-
-			local subContents = Functions.getRepoContents(item.path)
-			if subContents then Functions.createStructure(folder, subContents) end
-
-		elseif item.type == "file" and (item.name:match("%.lua$") or item.name:match("%.luau$")) then
-
-			local fileData = Functions.getRepoContents(item.path)
-			if fileData and fileData.content then
-				local sourceCode = Functions.from_base64(fileData.content)
-
-				local firstLine = sourceCode:match("^(.-)\n")
-				local scriptType = firstLine:match("%-%- @ScriptType: (.+)") or "Script"
-				local scriptInstance = Instance.new(scriptType)
-
-				scriptInstance.Name = item.name:gsub("%.lua$", "")
-				scriptInstance.Name = scriptInstance.Name:gsub("%.luau$", "")
-				scriptInstance.Source = Functions.clipMetadata(sourceCode)
-				scriptInstance.Parent = parent
-				Selection:Set({scriptInstance})
-				if tOE then print("Created new script: " .. scriptInstance.Name .. " (" .. scriptType .. ")") end
-			end
-		end
-	end
-	
-	-- Put the files in their folders
-	for _, folder in pairs(new_directiories) do	
-		for _, v in pairs(folder.Parent:GetChildren()) do
-			if not(v:IsA("ModuleScript") or v:IsA("Script") or v:IsA("LocalScript")) then continue end
-			if v.Name ~= folder.Name then continue end
-			
-			for _, item in pairs(folder:GetChildren()) do
-				item.Parent = v
-			end
-			
-			folder:Destroy()
-		end
-	end
-	
-	return
-end
 
 ----> Convert data from base 10 to base 64
 function Functions.to_base64(data: any) : string -- (XDeltaXen) - https://devforum.roblox.com/t/base64-encoding-and-decoding-in-lua/1719860
@@ -118,6 +36,108 @@ function Functions.from_base64(data: any) : string -- (XDeltaXen) - https://devf
 	end))
 end
 
+----> Return the contents of a repository
+function Functions.getRepoContents(repository: string, name: string, path: string, headers, branch: string): {} | nil
+	local success1, result1 = pcall(function()
+			return HttpService:RequestAsync({
+				Url = `https://api.github.com/repos/{repository}/contents/{path}/?ref={branch}`,
+				Method = "GET",
+				Headers = headers
+			})
+		end)
 
+	if success1 and not result1.Success then
+		warn(`(git-pull) Failed to fetch repository contents for file {name}: `.. result1.Body)
+		return
+	elseif not success1 then
+		warn(`(git-pull) Failed to fetch repository contents for file {name}: (no data)`)
+		return
+	end
+
+    return HttpService:JSONDecode(result1.Body)
+end
+
+function Functions.makeFile(myFileData, parent)
+	local sourceCode = Functions.from_base64(myFileData.content)
+	local firstLine = sourceCode:match("^(.-)\n") --TODO
+	local scriptType = firstLine:match("%-%- @ScriptType: (.+)") or "Script"
+	local scriptInstance = Instance.new(scriptType)
+		
+	scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+	scriptInstance.Name = scriptInstance.Name
+	
+	scriptInstance.Source = sourceCode
+	scriptInstance.Parent = parent
+	Selection:Set({scriptInstance})
+end
+
+function Functions.createStructure(parent: any, repository, name, filePath, headers, branch) : nil
+	local new_directiories: {Folder} = {}
+	local contents = Functions.getRepoContents(repository, name, filePath, headers, branch)
+
+	if not contents then return end
+
+	if not contents[1] then -- it's a file
+		if contents.type == "file" and (contents.name:match("%.lua$") or contents.name:match("%.luau$")) then
+			if contents and contents.content then
+				local sourceCode = Functions.from_base64(contents.content)
+				local firstLine = sourceCode:match("^(.-)\n")
+				local scriptType = firstLine:match("%-%- @ScriptType: (.+)") or "Script"
+				local scriptInstance = Instance.new(scriptType)
+
+				scriptInstance.Name = contents.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+				scriptInstance.Name = scriptInstance.Name
+
+				scriptInstance.Source = sourceCode
+				scriptInstance.Parent = parent
+				Selection:Set({scriptInstance})
+			end
+		end
+	elseif contents[1] and contents[1].type == "dir" or contents[1].type == "file" then -- it's a directory
+		for _, fileData in pairs(contents) do
+			if fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) and fileData and fileData.content then
+				Functions.makeFile(fileData, parent)
+
+			elseif fileData.type == "dir" then
+				local notService = not(game:FindFirstChild(fileData.name))
+
+				local folder: any
+
+				if notService then
+					folder = Instance.new("Folder")
+					folder.Name, folder.Parent = fileData.name, parent
+					table.insert(new_directiories, folder)
+				else
+					folder = game[fileData.name]
+				end
+				
+				local subContents = Functions.getRepoContents(repository, name, fileData.path, headers, branch)
+
+				if subContents then
+					Functions.createStructure(folder, repository, name, fileData.path, headers, branch)
+				end
+			else
+				warn(`(git-pull) Invalid file type for file {name}`)
+				return
+			end
+		end
+	end
+	
+	-- Parent scripts properly after the fact
+	for _, folder in pairs(new_directiories) do	
+		for _, v in pairs(folder.Parent:GetChildren()) do
+			if not(v:IsA("BaseScript")) then continue end
+			if v.Name ~= folder.Name then continue end
+			
+			for _, item in pairs(folder:GetChildren()) do
+				item.Parent = v
+			end
+			
+			folder:Destroy()
+		end
+	end
+	
+	return
+end
 
 return Functions

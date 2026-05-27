@@ -69,7 +69,7 @@ function main.gitPush(data: Types.GitDirectiveData)
 			issues += 1
 		end
 
-		if issues > 0 then return end
+		if issues > 0 then continue end
 		-- End of Guards
 
 		-- Find real script instance
@@ -93,7 +93,7 @@ function main.gitPush(data: Types.GitDirectiveData)
 
 		if not fileObject:IsA("BaseScript") then 
 			warn(`(git-push) Invalid instance for file {name}`)
-			return
+			continue
 		end
 		-- End of finding real script instance
 
@@ -186,8 +186,14 @@ function main.gitPush(data: Types.GitDirectiveData)
 		-- End of finally tryna push the stuff
 	end
 end
+--[[
 
+
+
+]]
 function main.gitPull(data: Types.GitDirectiveData)
+	-- also post parsing
+
 	local gitConfigLocal = data.config
 
 	for path, file in pairs(data.files) do
@@ -200,7 +206,6 @@ function main.gitPull(data: Types.GitDirectiveData)
 		local filePath = file.path or gitConfigLocal.path or gitConfigGlobal.path or ""
 		local branch = file.branch or gitConfigLocal.branch or gitConfigGlobal.branch or "main"
 
-		local url = baseURL:format(repository, filePath)..`?ref={branch}`
 		local headers = {
 			["Authorization"] = `token {token}`,
 			["Accept"] = "application/vnd.github.v3+json"
@@ -218,7 +223,7 @@ function main.gitPull(data: Types.GitDirectiveData)
 			issues += 1
 		end
 
-		if issues > 0 then return end
+		if issues > 0 then continue end
 		-- End of Guards
 		-- END OF INITIALIZATION
 
@@ -241,30 +246,14 @@ function main.gitPull(data: Types.GitDirectiveData)
 			fileObject = fileObject[t] or nil
 		end
 
-		if not fileObject:IsA("BaseScript") then 
-			warn(`(git-pull) Invalid instance for file {name}`)
-			return
+		if not fileObject:IsA("Instance") then
+			warn(`(git-pull) Invalid parent class for file {name}`)
+			continue
 		end
 		-- End of finding real script instance
 
 		-- Do the actual getting
-		local success1, result1 = pcall(function()
-			return HttpService:RequestAsync({
-				Url = url,
-				Method = "GET",
-				Headers = headers
-			})
-		end)
-
-		if success1 and not result1.Success then
-			warn(`(git-pull) Failed to fetch repository contents for file {name}: `.. result1.Body)
-			return
-		elseif not success1 then
-			warn(`(git-pull) Failed to fetch repository contents for file {name}: (no data)`)
-			return
-		end
-
-		local contents = HttpService:JSONDecode(result1.Body)
+		Functions.createStructure(fileObject, repository, name, filePath, headers, branch)
 		-- End of doing the actual getting
 	end
 end
