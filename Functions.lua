@@ -1,8 +1,14 @@
 --!native
 --!optimize 2
 local HttpService = game:GetService("HttpService")
+local KeyframeSequenceProvider = game:GetService("KeyframeSequenceProvider")
 local Selection = game:GetService("Selection")
 local Functions = {}
+local Keywords
+repeat
+	Keywords = require("./Keywords")
+	task.wait()
+until Keywords ~= nil
 
 ----> Convert data from base 10 to base 64
 function Functions.to_base64(data: any) : string -- (XDeltaXen) - https://devforum.roblox.com/t/base64-encoding-and-decoding-in-lua/1719860
@@ -59,9 +65,45 @@ end
 
 function Functions.makeFile(myFileData, parent)
 	local sourceCode = Functions.from_base64(myFileData.content)
-	local firstLine = sourceCode:match("^(.-)\n") --TODO
-	local scriptType = firstLine:match("%-%- @ScriptType: (.+)") or "Script"
-	local scriptInstance = Instance.new(scriptType)
+
+	local types = {0, 0, 0} -- s, c, m
+
+	for _, word in Keywords.s do
+		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
+		local _, count = string.gsub(sourceCode, gSafeWord, "")
+		types[1] += count
+	end
+
+	for _, word in Keywords.c do
+		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
+		local _, count = string.gsub(sourceCode, gSafeWord, "")
+		types[2] += count
+	end
+
+	for _, word in Keywords.m do
+		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
+		local _, count = string.gsub(sourceCode, gSafeWord, "")
+		types[3] += count
+	end
+
+	local scriptInstance
+
+	if types[1] > types[2] and types[1] > types[3] then
+		scriptInstance = Instance.new("Script")
+	elseif types[2] > types[1] and types[2] > types[3] then
+		scriptInstance = Instance.new("LocalScript")
+	elseif types[3] > types[1] and types[3] > types[2] then
+		scriptInstance = Instance.new("ModuleScript")
+	elseif types[1] == types[2] then
+		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: Script`)
+		scriptInstance = Instance.new("Script")
+	elseif types[2] == types[3] then
+		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
+		scriptInstance = Instance.new("ModuleScript")
+	else -- types[3] == types[1]
+		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
+		scriptInstance = Instance.new("ModuleScript")
+	end
 		
 	scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
 	scriptInstance.Name = scriptInstance.Name
