@@ -110,7 +110,6 @@ local module = {
     "__mode",
     "__metatable",
 
-    -- OOP
     "return {",
     "return self",
     ".__index =",
