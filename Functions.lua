@@ -106,7 +106,6 @@ function Functions.makeFile(myFileData, parent)
 	end
 		
 	scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
-	scriptInstance.Name = scriptInstance.Name
 	
 	scriptInstance.Source = sourceCode
 	scriptInstance.Parent = parent
@@ -122,18 +121,12 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 	if not contents[1] then -- it's a file
 		if contents.type == "file" and (contents.name:match("%.lua$") or contents.name:match("%.luau$")) then
 			if contents and contents.content then
-				local sourceCode = Functions.from_base64(contents.content)
-				local firstLine = sourceCode:match("^(.-)\n")
-				local scriptType = firstLine:match("%-%- @ScriptType: (.+)") or "Script"
-				local scriptInstance = Instance.new(scriptType)
-
-				scriptInstance.Name = contents.name:gsub("%.lua$", ""):gsub("%.luau$", "")
-				scriptInstance.Name = scriptInstance.Name
-
-				scriptInstance.Source = sourceCode
-				scriptInstance.Parent = parent
-				Selection:Set({scriptInstance})
+				Functions.makeFile(contents, parent)
+			else
+				warn(`(git-pull) Contents not found for file {name}`)
 			end
+		else
+			-- It's not a lua or luau file
 		end
 	elseif contents[1] and contents[1].type == "dir" or contents[1].type == "file" then -- it's a directory
 		for _, fileData in pairs(contents) do
