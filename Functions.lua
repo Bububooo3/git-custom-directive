@@ -9,9 +9,6 @@ repeat
 	task.wait()
 until Keywords ~= nil
 
-----> Push all the BaseScript descendants of an instance w/ correct hierarchy
-local baseURL = "https://api.github.com/repos/%s/contents/%s"
-
 function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
 	local result = object.Name
 	object = object.Parent or limit
@@ -122,7 +119,7 @@ end
 function Functions.getRepoContents(repository: string, name: string, path: string, headers, branch: string): {} | nil
 	local success1, result1 = pcall(function()
 			return HttpService:RequestAsync({
-				Url = `https://api.github.com/repos/{repository}/contents/{path}/?ref={branch}`,
+				Url = `https://api.github.com/repos/{repository}/contents/{path}?ref={branch}`,
 				Method = "GET",
 				Headers = headers
 			})
@@ -176,7 +173,7 @@ function Functions.makeFile(myFileData, parent)
 	elseif types[2] == types[3] then
 		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
 		scriptInstance = Instance.new("ModuleScript")
-	else -- types[3] == types[1]
+	else -- types[3] == types[1] == types[2]
 		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
 		scriptInstance = Instance.new("ModuleScript")
 	end
@@ -188,11 +185,11 @@ function Functions.makeFile(myFileData, parent)
 	Selection:Set({scriptInstance})
 end
 
-function Functions.createStructure(parent: any, repository, name, filePath, headers, branch) : nil
-	local new_directiories: {Folder} = {}
+function Functions.createStructure(parent: any, repository, name, filePath, headers, branch) : {Folder}
+	local new_directories: {Folder} = {}
 	local contents = Functions.getRepoContents(repository, name, filePath, headers, branch)
 
-	if not contents then return end
+	if not contents then return {} end
 
 	if not contents[1] then -- it's a file
 		if contents.type == "file" and (contents.name:match("%.lua$") or contents.name:match("%.luau$")) then
@@ -204,10 +201,17 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 		else
 			-- It's not a lua or luau file
 		end
-	elseif contents[1] and contents[1].type == "dir" or contents[1].type == "file" then -- it's a directory
+	elseif contents[1] and (contents[1].type == "dir" or contents[1].type == "file") then -- it's a directory
 		for _, fileData in pairs(contents) do
 			if fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) and fileData and fileData.content then
 				Functions.makeFile(fileData, parent)
+			
+			elseif fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) then
+    			local fileContents = Functions.getRepoContents(repository, name, fileData.path, headers, branch)
+
+    			if fileContents and fileContents.content then
+    			    Functions.makeFile(fileContents, parent)
+    			end
 
 			elseif fileData.type == "dir" then
 				local notService = not(game:FindFirstChild(fileData.name))
@@ -217,38 +221,26 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 				if notService then
 					folder = Instance.new("Folder")
 					folder.Name, folder.Parent = fileData.name, parent
-					table.insert(new_directiories, folder)
+					table.insert(new_directories, folder)
 				else
 					folder = game[fileData.name]
 				end
 				
-				local subContents = Functions.getRepoContents(repository, name, fileData.path, headers, branch)
+				local add = Functions.createStructure(folder, repository, name, fileData.path, headers, branch)
 
-				if subContents then
-					Functions.createStructure(folder, repository, name, fileData.path, headers, branch)
+				for _, v in pairs(add) do
+					table.insert(new_directories, v)
 				end
+
+				table.clear(add)
 			else
 				warn(`(git-pull) Invalid file type for file {name}`)
-				return
+				continue
 			end
 		end
 	end
 	
-	-- Parent scripts properly after the fact
-	for _, folder in pairs(new_directiories) do	
-		for _, v in pairs(folder.Parent:GetChildren()) do
-			if not(v:IsA("BaseScript")) then continue end
-			if v.Name ~= folder.Name then continue end
-			
-			for _, item in pairs(folder:GetChildren()) do
-				item.Parent = v
-			end
-			
-			folder:Destroy()
-		end
-	end
-	
-	return
+	return new_directories
 end
 
 return Functions

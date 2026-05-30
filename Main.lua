@@ -55,6 +55,9 @@ function main.gitPush(data: Types.GitDirectiveData)
 		local msg = file.message or gitConfigLocal.message or gitConfigGlobal.message or nil
 
 		local url = baseURL:format(repository, filePath)
+
+		if filePath == "" then url = url:sub(1,-2) end --> Prevent // on empty
+
 		local headers = {
 			["Authorization"] = `token {token}`,
 			["Accept"] = "application/vnd.github.v3+json"
@@ -91,7 +94,8 @@ function main.gitPush(data: Types.GitDirectiveData)
 		end
 
 		for i, t in ipairs(split) do
-			fileObject = fileObject[t] or nil
+			if not fileObject then break end
+    		fileObject = fileObject:FindFirstChild(t)
 		end
 
 		-- local isContainer = not fileObject:IsA("BaseScript")
@@ -107,7 +111,7 @@ function main.gitPush(data: Types.GitDirectiveData)
 
 		local success1, result = pcall(function()
 			return HttpService:RequestAsync({
-				Url = url..`?ref={branch}`,
+				Url = url..`/{name}.lua?ref={branch}`,
 				Method = "GET",
 				Headers = headers
 			})
@@ -262,7 +266,8 @@ function main.gitPull(data: Types.GitDirectiveData)
 		end
 
 		for i, t in ipairs(split) do
-			fileObject = fileObject[t] or nil
+			if not fileObject then break end
+    		fileObject = fileObject:FindFirstChild(t)
 		end
 
 		if not fileObject:IsA("Instance") then
@@ -272,8 +277,22 @@ function main.gitPull(data: Types.GitDirectiveData)
 		-- End of finding real script instance
 
 		-- Do the actual getting
-		Functions.createStructure(fileObject, repository, name, filePath, headers, branch)
+		local new_directories = Functions.createStructure(fileObject, repository, name, filePath, headers, branch)
 		-- End of doing the actual getting
+
+		-- Parent scripts properly after the fact
+		for _, folder in pairs(new_directories) do	
+			for _, v in pairs(folder.Parent:GetChildren()) do
+				if not(v:IsA("BaseScript")) then continue end
+				if v.Name ~= folder.Name then continue end
+
+				for _, item in pairs(folder:GetChildren()) do
+					item.Parent = v
+				end
+
+				folder:Destroy()
+			end
+		end
 	end
 end
 
