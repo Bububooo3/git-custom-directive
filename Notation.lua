@@ -14,7 +14,7 @@ function gitParse(raw: string)
         for _, word: string in pairs(line:split(" ")) do
             for token, callback in pairs(tokens) do
                 if (word:lower()):find(token, 1, true) then
-                    
+
                 end
             end
 
@@ -56,7 +56,7 @@ end
 
 					token: "12345678910";
 					repository: "username/reponame";
-					path: "";
+					path: "subfolder/double-sub-folder/";
 					branch: "main";
 					commit-message: "We did it!";
 				};

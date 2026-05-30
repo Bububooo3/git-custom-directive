@@ -24,42 +24,65 @@ function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
 	return result
 end
 
-function Functions.pushContainer(parent: Instance, mySHA: string, headers, repo, path1, msg, branch)
-
+function Functions.pushContainer(parent: Instance, headers, url, msg, branch)
 	for _, child in pairs(parent:GetChildren()) do
 		if child:IsA("BaseScript") then
-			local path2 = Functions.getFullNameFormatted(child, parent.Parent) .. ".lua"
-			local url = baseURL:format(repo, path1..path2)
+
+			-- Get SHA
+			local mySHA
+
+			local success1, result = pcall(function()
+				return HttpService:RequestAsync({
+					Url = url..`/{child.Name}.lua?ref={branch}`,
+					Method = "GET",
+					Headers = headers
+				})
+			end)
+
+			if success1 and result.Success then
+				local temp = HttpService:JSONDecode(result.Body)
+				mySHA = temp.sha
+			end
+			-- End of getting SHA
+
+			-- SHA guard
+			if not mySHA then
+				warn(`(git-push) Unable to obtain remote SHA for file {child.Name}`)
+			end
+			-- End of SHA guard
 
 			local success4, result4 = pcall(function()
 					return HttpService:RequestAsync({
-						Url = url,
+						Url = url..`/{child.Name}.lua`,
 						Method = "PUT",
 						Headers = headers,
 						Body = HttpService:JSONEncode({
-							message = `Updated file {child.Name} -> ({msg})`;
-							content = Functions.to_base64(child.Source);
-							branch = branch;
+							message = (mySHA) and `Updated file {child.Name} -> ({msg})` or `Created file {child.Name} -> ({msg})`,
+							content = Functions.to_base64(child.Source),
+							branch = branch,
 							sha = mySHA
 					})
 				})
 			end)
 
 			if success4 and not result4.Success then
-				warn(`(git-push) Failed to push file {child.Name}: `.. result4.Body)
+				warn(`(git-push) Failed to push file {child.Name} -> ({msg}): `.. result4.Body)
 			elseif not success4 then
-				warn(`(git-push) Failed to push file {child.Name}: (no data)`)
-			end			
+				warn(`(git-push) Failed to push file {child.Name} -> ({msg}): (no data)`)
+			end
 		end
-
-		Functions.pushContainer(
-			child,
-			mySHA,
-			headers,
-			url,
-			msg,
-			branch
-		)
+		
+		if #child:GetChildren() > 0 then
+			local myURL = `{url}/{child.Name}`
+			
+			Functions.pushContainer(
+				child,
+				headers,
+				myURL,
+				msg,
+				branch
+			)
+		end
 	end
 end
 

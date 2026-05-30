@@ -50,9 +50,9 @@ function main.gitPush(data: Types.GitDirectiveData)
 		local name = file.name or split[#split] -- will have issues if there are periods in the instance names
 		local repository = file.repository or gitConfigLocal.repository or gitConfigGlobal.repository or nil
 		local token = file.token or gitConfigLocal.token or gitConfigGlobal.token or nil
-		local filePath = file.path or gitConfigLocal.path or gitConfigGlobal.path or ""
+		local filePath = file.path or gitConfigLocal.path or gitConfigGlobal.path or "" -- path should have no / at start or end when delivered
 		local branch = file.branch or gitConfigLocal.branch or gitConfigGlobal.branch or "main"
-		local msg = file.message or gitConfigLocal.message or gitConfigGlobal.message or `Updated {name}`
+		local msg = file.message or gitConfigLocal.message or gitConfigGlobal.message or nil
 
 		local url = baseURL:format(repository, filePath)
 		local headers = {
@@ -120,51 +120,51 @@ function main.gitPush(data: Types.GitDirectiveData)
 		-- End of getting SHA
 		
 		-- Getting backup SHA
-		if not mySHA then
-			warn(`(git-push) Initial attempt to retrieve SHA failed for file {name}`)
-			warn(`(git-push) Attempting to create new branch from base branch for file {name}`)
+		-- if not mySHA then
+		-- 	warn(`(git-push) Initial attempt to retrieve SHA failed for file {name}`)
+		-- 	warn(`(git-push) Attempting to create new branch from base branch for file {name}`)
 
-			local success2, result2 = pcall(function()
-			    return HttpService:RequestAsync({
-			        Url = `https://api.github.com/repos/{repository}/git/refs/heads/{gitConfigGlobal.base}`,
-			        Method = "GET",
-			        Headers = headers
-			    })
-			end)
+		-- 	local success2, result2 = pcall(function()
+		-- 		return HttpService:RequestAsync({
+		-- 			Url = `https://api.github.com/repos/{repository}/git/refs/heads/{gitConfigGlobal.base}`,
+		-- 			Method = "GET",
+		-- 			Headers = headers
+		-- 		})
+		-- 	end)
 
-			if success2 and result2.Success then
-			    mySHA = HttpService:JSONDecode(result2.Body).object.sha 
-			else
-			    warn(`(git-push) Failed to retrieve base SHA for file {name}`)
-			end
+		-- 	if success2 and result2.Success then
+		-- 		mySHA = HttpService:JSONDecode(result2.Body).object.sha 
+		-- 	else
+		-- 		warn(`(git-push) Failed to retrieve base SHA for file {name}`)
+		-- 	end
 
-			local requestBody = HttpService:JSONEncode({
-				ref = `refs/heads/{branch}`,
-				sha = mySHA
-			})
+		-- 	local requestBody = HttpService:JSONEncode({
+		-- 		ref = `refs/heads/{branch}`,
+		-- 		sha = mySHA
+		-- 	})
+			
+		-- 	local success3, result3 = pcall(function()
+		-- 		return HttpService:RequestAsync({
+		-- 			Url = `https://api.github.com/repos/{repository}/git/refs`,
+		-- 			Method = "POST",
+		-- 			Headers = headers,
+		-- 			Body = requestBody
+		-- 		})
+		-- 	end)
 
-			local success3, result3 = pcall(function()
-				return HttpService:RequestAsync({
-					Url = `https://api.github.com/repos/{repository}/git/refs`,
-					Method = "POST",
-					Headers = headers,
-					Body = requestBody
-				})
-			end)
-
-			if success3 and not result3.Success then
-				warn(`(git-push) Failed to create branch for file {name}: `.. result3.Body)
-				mySHA = nil
-			elseif not success3 then
-				warn(`(git-push) Failed to create branch for file {name}: (no data)`)
-				mySHA = nil
-			end
-		end
+		-- 	if success3 and not result3.Success then
+		-- 		warn(`(git-push) Failed to create branch for file {name}: `.. result3.Body)
+		-- 		mySHA = nil
+		-- 	elseif not success3 then
+		-- 		warn(`(git-push) Failed to create branch for file {name}: (no data)`)
+		-- 		mySHA = nil
+		-- 	end
+		-- end
 		-- End of getting backup SHA
 
 		-- SHA guard
 		if not mySHA then
-			warn(`(git-push) Unable to obtain remote SHA for file {name}`)
+			warn(`(git-push) Unable to obtain remote SHA for file {name}`) -- so its a new file probably
 		end
 		-- End of SHA guard
 
@@ -172,13 +172,13 @@ function main.gitPush(data: Types.GitDirectiveData)
 		if fileObject:IsA("BaseScript") then
 			local success4, result4 = pcall(function()
 					return HttpService:RequestAsync({
-						Url = url,
+						Url = url..`/{name}.lua`,
 						Method = "PUT",
 						Headers = headers,
 						Body = HttpService:JSONEncode({
-							message = msg;
-							content = Functions.to_base64(fileObject.Source);
-							branch = branch;
+							message = msg or ((mySHA) and `Updated {name}` or `Created {name}`),
+							content = Functions.to_base64(fileObject.Source),
+							branch = branch,
 							sha = mySHA
 					})
 				})
@@ -191,14 +191,17 @@ function main.gitPush(data: Types.GitDirectiveData)
 			end			
 		end
 
-		Functions.pushContainer(
-			fileObject,
-			mySHA,
-			headers,
-			repository,
-			msg,
-			branch
-		)
+		if #fileObject:GetChildren() > 0 then
+			local myURL = `{url}/{fileObject.Name}`
+			
+			Functions.pushContainer(
+				fileObject,
+				headers,
+				myURL,
+				msg,
+				branch
+			)
+		end
 		-- End of finally tryna push the stuff
 	end
 end
