@@ -1,7 +1,6 @@
 --!native
 --!optimize 2
 local HttpService = game:GetService("HttpService")
-local KeyframeSequenceProvider = game:GetService("KeyframeSequenceProvider")
 local Selection = game:GetService("Selection")
 local Functions = {}
 local Keywords
@@ -9,6 +8,60 @@ repeat
 	Keywords = require("./Keywords")
 	task.wait()
 until Keywords ~= nil
+
+----> Push all the BaseScript descendants of an instance w/ correct hierarchy
+local baseURL = "https://api.github.com/repos/%s/contents/%s"
+
+function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
+	local result = object.Name
+	object = object.Parent or limit
+	
+	while object and limit and object ~= limit do
+		result = object.Name .. "/" .. result
+		object = object.Parent or limit
+	end
+
+	return result
+end
+
+function Functions.pushContainer(parent: Instance, mySHA: string, headers, repo, path1, msg, branch)
+
+	for _, child in pairs(parent:GetChildren()) do
+		if child:IsA("BaseScript") then
+			local path2 = Functions.getFullNameFormatted(child, parent.Parent) .. ".lua"
+			local url = baseURL:format(repo, path1..path2)
+
+			local success4, result4 = pcall(function()
+					return HttpService:RequestAsync({
+						Url = url,
+						Method = "PUT",
+						Headers = headers,
+						Body = HttpService:JSONEncode({
+							message = `Updated file {child.Name} -> ({msg})`;
+							content = Functions.to_base64(child.Source);
+							branch = branch;
+							sha = mySHA
+					})
+				})
+			end)
+
+			if success4 and not result4.Success then
+				warn(`(git-push) Failed to push file {child.Name}: `.. result4.Body)
+			elseif not success4 then
+				warn(`(git-push) Failed to push file {child.Name}: (no data)`)
+			end			
+		end
+
+		Functions.pushContainer(
+			child,
+			mySHA,
+			headers,
+			url,
+			msg,
+			branch
+		)
+	end
+end
 
 ----> Convert data from base 10 to base 64
 function Functions.to_base64(data: any) : string -- (XDeltaXen) - https://devforum.roblox.com/t/base64-encoding-and-decoding-in-lua/1719860

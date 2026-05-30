@@ -1,3 +1,6 @@
+--!native
+--!optimize 2
+
 export type GitConfigData = {
 	token: string | nil;
 	repository: string | nil;

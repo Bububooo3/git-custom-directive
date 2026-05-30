@@ -1,3 +1,6 @@
+--!native
+--!optimize 2
+
 --[[
 
     function self:StudioClosedUpdate()
@@ -91,11 +94,13 @@ function main.gitPush(data: Types.GitDirectiveData)
 			fileObject = fileObject[t] or nil
 		end
 
-		if not fileObject:IsA("BaseScript") then 
-			warn(`(git-push) Invalid instance for file {name}`)
+		-- local isContainer = not fileObject:IsA("BaseScript")
+
+		if not fileObject:IsA("Instance") then 
+			warn(`(git-push) Invalid class for file {name}`)
 			continue
 		end
-		-- End of finding real script instance
+		-- End of finding real script instance or "folder" (container)
 
 		-- Get SHA
 		local mySHA = nil
@@ -164,25 +169,36 @@ function main.gitPush(data: Types.GitDirectiveData)
 		-- End of SHA guard
 
 		-- Finally try and push the stuff
-		local success4, result4 = pcall(function()
-				return HttpService:RequestAsync({
-					Url = url,
-					Method = "PUT",
-					Headers = headers,
-					Body = HttpService:JSONEncode({
-						message = msg;
-						content = Functions.to_base64(fileObject.Source);
-						branch = branch;
-						sha = mySHA
+		if fileObject:IsA("BaseScript") then
+			local success4, result4 = pcall(function()
+					return HttpService:RequestAsync({
+						Url = url,
+						Method = "PUT",
+						Headers = headers,
+						Body = HttpService:JSONEncode({
+							message = msg;
+							content = Functions.to_base64(fileObject.Source);
+							branch = branch;
+							sha = mySHA
+					})
 				})
-			})
-		end)
+			end)
 
-		if success4 and not result4.Success then
-			warn(`(git-push) Failed to push file {name}: `.. result4.Body)
-		elseif not success4 then
-			warn(`(git-push) Failed to push file {name}: (no data)`)
+			if success4 and not result4.Success then
+				warn(`(git-push) Failed to push file {name}: `.. result4.Body)
+			elseif not success4 then
+				warn(`(git-push) Failed to push file {name}: (no data)`)
+			end			
 		end
+
+		Functions.pushContainer(
+			fileObject,
+			mySHA,
+			headers,
+			repository,
+			msg,
+			branch
+		)
 		-- End of finally tryna push the stuff
 	end
 end

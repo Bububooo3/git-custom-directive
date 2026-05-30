@@ -1,3 +1,6 @@
+--!native
+--!optimize 2
+
 local server = {
     "FireClient",
     "FireAllClients",
@@ -23,7 +26,6 @@ local server = {
     ":SetNetworkOwner",
     ":GetNetworkOwner",
 
-    -- Player
     "PlayerAdded",
     "PlayerRemoving",
     "CharacterAutoLoads",
