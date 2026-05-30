@@ -94,7 +94,6 @@ end
 					repository: "username/reponame";
 					path: "";
 					branch: "main";
-					output-enabled: false;
 				};
 			</files>
 		];

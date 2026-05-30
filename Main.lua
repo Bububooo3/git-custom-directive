@@ -296,4 +296,8 @@ function main.gitPull(data: Types.GitDirectiveData)
 	end
 end
 
+function main.gitConfigGlobal(data: Types.GitDirectiveData)
+	
+end
+
 return main
