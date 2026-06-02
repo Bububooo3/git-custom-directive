@@ -37,9 +37,9 @@ local gitConfigGlobal: Types.GitConfigData = {base='main'}
 local baseURL = "https://api.github.com/repos/%s/contents/%s"
 local HttpService = game:GetService("HttpService")
 
-local main = {}
+local GitFxns = {}
 
-function main.gitPush(data: Types.GitDirectiveData)
+function GitFxns.gitPush(data: Types.GitDirectiveData)
 	-- post parsing
 
 	local gitConfigLocal = data.config
@@ -214,7 +214,7 @@ end
 
 
 ]]
-function main.gitPull(data: Types.GitDirectiveData)
+function GitFxns.gitPull(data: Types.GitDirectiveData)
 	-- also post parsing
 
 	local gitConfigLocal = data.config
@@ -296,8 +296,10 @@ function main.gitPull(data: Types.GitDirectiveData)
 	end
 end
 
-function main.gitConfigGlobal(data: Types.GitDirectiveData)
-	
+function GitFxns.gitConfigGlobal(config: Types.GitConfigData)
+	for k, v in pairs(config) do
+		rawset(gitConfigGlobal, k, v)
+	end
 end
 
-return main
+return GitFxns
