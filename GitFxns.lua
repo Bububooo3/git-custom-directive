@@ -2,6 +2,8 @@
 --!native
 --!optimize 2
 
+--$MODULE
+
 --[[
 
     function self:StudioClosedUpdate()
