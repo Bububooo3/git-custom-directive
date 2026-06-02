@@ -1,3 +1,4 @@
+
 --!native
 --!optimize 2
 
@@ -95,7 +96,7 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 
 		for i, t in ipairs(split) do
 			if not fileObject then break end
-    		fileObject = fileObject:FindFirstChild(t)
+			fileObject = fileObject:FindFirstChild(t)
 		end
 
 		-- local isContainer = not fileObject:IsA("BaseScript")
@@ -122,7 +123,7 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 			mySHA = temp.sha
 		end
 		-- End of getting SHA
-		
+
 		-- Getting backup SHA
 		-- if not mySHA then
 		-- 	warn(`(git-push) Initial attempt to retrieve SHA failed for file {name}`)
@@ -146,7 +147,7 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 		-- 		ref = `refs/heads/{branch}`,
 		-- 		sha = mySHA
 		-- 	})
-			
+
 		-- 	local success3, result3 = pcall(function()
 		-- 		return HttpService:RequestAsync({
 		-- 			Url = `https://api.github.com/repos/{repository}/git/refs`,
@@ -174,16 +175,31 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 
 		-- Finally try and push the stuff
 		if fileObject:IsA("BaseScript") then
+			local src: string = fileObject.Source
+			
+			if not src:find("--$MODULE") or src:find("--$SERVER") or src:find("--$CLIENT") then
+				if fileObject:IsA("ModuleScript") then
+					src = `--$MODULE\n{src}`
+					
+				elseif fileObject:IsA("Script") then
+					src = `--$SERVER\n{src}`
+					
+				elseif fileObject:IsA("LocalScript") then
+					src = `--$CLIENT\n{src}`
+					
+				end
+			end
+			
 			local success4, result4 = pcall(function()
-					return HttpService:RequestAsync({
-						Url = url..`/{name}.lua`,
-						Method = "PUT",
-						Headers = headers,
-						Body = HttpService:JSONEncode({
-							message = msg or ((mySHA) and `Updated {name}` or `Created {name}`),
-							content = Functions.to_base64(fileObject.Source),
-							branch = branch,
-							sha = mySHA
+				return HttpService:RequestAsync({
+					Url = url..`/{name}.lua`,
+					Method = "PUT",
+					Headers = headers,
+					Body = HttpService:JSONEncode({
+						message = msg or ((mySHA) and `Updated {name}` or `Created {name}`),
+						content = Functions.to_base64(src),
+						branch = branch,
+						sha = mySHA
 					})
 				})
 			end)
@@ -197,7 +213,7 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 
 		if #fileObject:GetChildren() > 0 then
 			local myURL = `{url}/{fileObject.Name}`
-			
+
 			Functions.pushContainer(
 				fileObject,
 				headers,
@@ -267,7 +283,7 @@ function GitFxns.gitPull(data: Types.GitDirectiveData)
 
 		for i, t in ipairs(split) do
 			if not fileObject then break end
-    		fileObject = fileObject:FindFirstChild(t)
+			fileObject = fileObject:FindFirstChild(t)
 		end
 
 		if not fileObject:IsA("Instance") then

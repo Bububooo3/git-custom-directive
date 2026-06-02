@@ -1,6 +1,8 @@
 --!native
 --!optimize 2
 
+--$MODULE
+
 local HttpService = game:GetService("HttpService")
 local Selection = game:GetService("Selection")
 local Functions = {}
@@ -13,7 +15,7 @@ until Keywords ~= nil
 function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
 	local result = object.Name
 	object = object.Parent or limit
-	
+
 	while object and limit and object ~= limit do
 		result = object.Name .. "/" .. result
 		object = object.Parent or limit
@@ -50,15 +52,15 @@ function Functions.pushContainer(parent: Instance, headers, url, msg, branch)
 			-- End of SHA guard
 
 			local success4, result4 = pcall(function()
-					return HttpService:RequestAsync({
-						Url = url..`/{child.Name}.lua`,
-						Method = "PUT",
-						Headers = headers,
-						Body = HttpService:JSONEncode({
-							message = (mySHA) and `Updated file {child.Name} -> ({msg})` or `Created file {child.Name} -> ({msg})`,
-							content = Functions.to_base64(child.Source),
-							branch = branch,
-							sha = mySHA
+				return HttpService:RequestAsync({
+					Url = url..`/{child.Name}.lua`,
+					Method = "PUT",
+					Headers = headers,
+					Body = HttpService:JSONEncode({
+						message = (mySHA) and `Updated file {child.Name} -> ({msg})` or `Created file {child.Name} -> ({msg})`,
+						content = Functions.to_base64(child.Source),
+						branch = branch,
+						sha = mySHA
 					})
 				})
 			end)
@@ -69,10 +71,10 @@ function Functions.pushContainer(parent: Instance, headers, url, msg, branch)
 				warn(`(git-push) Failed to push file {child.Name} -> ({msg}): (no data)`)
 			end
 		end
-		
+
 		if #child:GetChildren() > 0 then
 			local myURL = `{url}/{child.Name}`
-			
+
 			Functions.pushContainer(
 				child,
 				headers,
@@ -119,12 +121,12 @@ end
 ----> Return the contents of a repository
 function Functions.getRepoContents(repository: string, name: string, path: string, headers, branch: string): {} | nil
 	local success1, result1 = pcall(function()
-			return HttpService:RequestAsync({
-				Url = `https://api.github.com/repos/{repository}/contents/{path}?ref={branch}`,
-				Method = "GET",
-				Headers = headers
-			})
-		end)
+		return HttpService:RequestAsync({
+			Url = `https://api.github.com/repos/{repository}/contents/{path}?ref={branch}`,
+			Method = "GET",
+			Headers = headers
+		})
+	end)
 
 	if success1 and not result1.Success then
 		warn(`(git-pull) Failed to fetch repository contents for file {name}: `.. result1.Body)
@@ -134,7 +136,7 @@ function Functions.getRepoContents(repository: string, name: string, path: strin
 		return
 	end
 
-    return HttpService:JSONDecode(result1.Body)
+	return HttpService:JSONDecode(result1.Body)
 end
 
 function Functions.makeFile(myFileData, parent)
@@ -146,41 +148,56 @@ function Functions.makeFile(myFileData, parent)
 		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
 		local _, count = string.gsub(sourceCode, gSafeWord, "")
 		types[1] += count
+		
+		if word == "--$SERVER" then
+			count = math.huge
+			break
+		end
 	end
 
 	for _, word in Keywords.c do
 		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
 		local _, count = string.gsub(sourceCode, gSafeWord, "")
 		types[2] += count
+		
+		if word == "--$CLIENT" then
+			count = math.huge
+			break
+		end
 	end
 
 	for _, word in Keywords.m do
 		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
 		local _, count = string.gsub(sourceCode, gSafeWord, "")
 		types[3] += count
+		
+		if word == "--$MODULE" then
+			count = math.huge
+			break
+		end
 	end
 
 	local scriptInstance
-
+	
 	if types[1] > types[2] and types[1] > types[3] then
 		scriptInstance = Instance.new("Script")
+		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		
 	elseif types[2] > types[1] and types[2] > types[3] then
 		scriptInstance = Instance.new("LocalScript")
+		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		
 	elseif types[3] > types[1] and types[3] > types[2] then
 		scriptInstance = Instance.new("ModuleScript")
-	elseif types[1] == types[2] then
-		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: Script`)
-		scriptInstance = Instance.new("Script")
-	elseif types[2] == types[3] then
-		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
-		scriptInstance = Instance.new("ModuleScript")
-	else -- types[3] == types[1] == types[2]
-		warn(`(git-pull) File guessing failed for file {myFileData.name}. Falling back to ClassName: ModuleScript`)
-		scriptInstance = Instance.new("ModuleScript")
-	end
+		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
 		
-	scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
-	
+	else
+		scriptInstance = Instance.new("ModuleScript")
+		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		warn(`(git-pull) File guessing failed for file {scriptInstance}. Falling back to ClassName: ModuleScript`)
+		warn(`(Server: {types[1]}\n Client: {types[2]}\n Module: {types[3]})`)
+	end
+
 	scriptInstance.Source = sourceCode
 	scriptInstance.Parent = parent
 	Selection:Set({scriptInstance})
@@ -206,13 +223,13 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 		for _, fileData in pairs(contents) do
 			if fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) and fileData and fileData.content then
 				Functions.makeFile(fileData, parent)
-			
-			elseif fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) then
-    			local fileContents = Functions.getRepoContents(repository, name, fileData.path, headers, branch)
 
-    			if fileContents and fileContents.content then
-    			    Functions.makeFile(fileContents, parent)
-    			end
+			elseif fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) then
+				local fileContents = Functions.getRepoContents(repository, name, fileData.path, headers, branch)
+
+				if fileContents and fileContents.content then
+					Functions.makeFile(fileContents, parent)
+				end
 
 			elseif fileData.type == "dir" then
 				local notService = not(game:FindFirstChild(fileData.name))
@@ -226,7 +243,7 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 				else
 					folder = game[fileData.name]
 				end
-				
+
 				local add = Functions.createStructure(folder, repository, name, fileData.path, headers, branch)
 
 				for _, v in pairs(add) do
@@ -240,7 +257,7 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 			end
 		end
 	end
-	
+
 	return new_directories
 end
 

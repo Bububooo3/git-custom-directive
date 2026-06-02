@@ -1,6 +1,8 @@
 --!native
 --!optimize 2
 
+--$MODULE
+
 export type GitConfigData = {
 	token: string | nil;
 	repository: string | nil;

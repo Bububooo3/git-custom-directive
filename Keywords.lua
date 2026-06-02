@@ -1,6 +1,8 @@
 --!native
 --!optimize 2
 
+--$MODULE
+
 local server = {
     "FireClient",
     "FireAllClients",

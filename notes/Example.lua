@@ -1,3 +1,5 @@
+--$MODULE
+
 -- EXAMPLE INPUT
 --[[
 [=[

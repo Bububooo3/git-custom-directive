@@ -1,3 +1,5 @@
+--$MODULE
+
 local tokens = {
     ["[=["] = function()
 
