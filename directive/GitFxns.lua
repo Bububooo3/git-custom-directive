@@ -261,7 +261,7 @@ function GitFxns.gitPull(data: Types.GitDirectiveData)
 			fileObject = fileObject:FindFirstChild(t)
 		end
 
-		if not fileObject:IsA("Instance") then
+		if not fileObject then
 			warn(`(git-pull) Invalid parent class for file {name}`)
 			continue
 		end
