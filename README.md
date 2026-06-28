@@ -6,6 +6,7 @@ Using text alone, Roblox programmers are able to version-control their scripts.
 
 > [!NOTE]
 > The token entry is a hazard, but it's there because this tool/library is part of a larger future plugin (I made this as a favor), which will store the token securely using built-in methods from the plugin library.
+> The comments can exist alongside code, although in the examples the file schema is only comments
 
 <hr>
 <br>
