@@ -1,7 +1,7 @@
+--$MODULE
+
 --!native
 --!optimize 2
-
---$MODULE
 
 -- ============================================================
 --  LEXER
@@ -214,7 +214,7 @@ local function parse(tokens: {{type: string, value: string?}})
 
 	-- Consume an optional semicolon
 	local function eatSemicolon()
-        local e = peek()
+		local e = peek()
 
 		if e and e.type == TokenType.SEMICOLON then
 			consume()

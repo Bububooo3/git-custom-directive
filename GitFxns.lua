@@ -1,8 +1,7 @@
+--$MODULE
 
 --!native
 --!optimize 2
-
---$MODULE
 
 --[[
 
@@ -85,23 +84,28 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 		local root = split[1]
 		local fileObject
 
+		local startIndex = 1
+
 		if root == "game" then
 			fileObject = game
-			table.remove(split, 1)
+			startIndex = 2
 		elseif root == "script" then
-			fileObject = script
+			warn(`(git-push) Do not use relative file paths: (file {name})`)
+			continue
 		elseif game:FindFirstChild(root) then
 			fileObject = game
+			startIndex = 1  -- don't skip, let the loop resolve root as first child
 		else
 			warn(`(git-push) Invalid path for file {name}`)
+			continue
 		end
-
-		for i, t in ipairs(split) do
+		
+		for i = startIndex, #split do
 			if not fileObject then break end
-			fileObject = fileObject:FindFirstChild(t)
+			fileObject = fileObject:FindFirstChild(split[i])
 		end
 
-		-- local isContainer = not fileObject:IsA("BaseScript")
+		-- local isContainer = not Functions.isScript(fileObject)
 
 		if not fileObject:IsA("Instance") then 
 			warn(`(git-push) Invalid class for file {name}`)
@@ -127,47 +131,48 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 		-- End of getting SHA
 
 		-- Getting backup SHA
-		-- if not mySHA then
-		-- 	warn(`(git-push) Initial attempt to retrieve SHA failed for file {name}`)
-		-- 	warn(`(git-push) Attempting to create new branch from base branch for file {name}`)
+		 --if not mySHA then
+		 --	warn(`(git-push) Initial attempt to retrieve SHA failed for file {name}`)
+		 --	warn(`(git-push) Attempting to create new branch from base branch for file {name}`)
 
-		-- 	local success2, result2 = pcall(function()
-		-- 		return HttpService:RequestAsync({
-		-- 			Url = `https://api.github.com/repos/{repository}/git/refs/heads/{gitConfigGlobal.base}`,
-		-- 			Method = "GET",
-		-- 			Headers = headers
-		-- 		})
-		-- 	end)
+		 --	local success2, result2 = pcall(function()
+		 --		return HttpService:RequestAsync({
+		 --			Url = `https://api.github.com/repos/{repository}/git/refs/heads/{gitConfigGlobal.base}`,
+		 --			Method = "GET",
+		 --			Headers = headers
+		 --		})
+		 --	end)
 
-		-- 	if success2 and result2.Success then
-		-- 		mySHA = HttpService:JSONDecode(result2.Body).object.sha 
-		-- 	else
-		-- 		warn(`(git-push) Failed to retrieve base SHA for file {name}`)
-		-- 	end
+		 --	if success2 and result2.Success then
+		 --		mySHA = HttpService:JSONDecode(result2.Body).object.sha 
+		 --	else
+		 --		warn(`(git-push) Failed to retrieve base SHA for file {name}`)
+		 --	end
 
-		-- 	local requestBody = HttpService:JSONEncode({
-		-- 		ref = `refs/heads/{branch}`,
-		-- 		sha = mySHA
-		-- 	})
+		 --	local requestBody = HttpService:JSONEncode({
+		 --		ref = `refs/heads/{branch}`,
+		 --		sha = mySHA
+		 --	})
 
-		-- 	local success3, result3 = pcall(function()
-		-- 		return HttpService:RequestAsync({
-		-- 			Url = `https://api.github.com/repos/{repository}/git/refs`,
-		-- 			Method = "POST",
-		-- 			Headers = headers,
-		-- 			Body = requestBody
-		-- 		})
-		-- 	end)
+		 --	local success3, result3 = pcall(function()
+		 --		return HttpService:RequestAsync({
+		 --			Url = `https://api.github.com/repos/{repository}/git/refs`,
+		 --			Method = "POST",
+		 --			Headers = headers,
+		 --			Body = requestBody
+		 --		})
+		 --	end)
 
-		-- 	if success3 and not result3.Success then
-		-- 		warn(`(git-push) Failed to create branch for file {name}: `.. result3.Body)
-		-- 		mySHA = nil
-		-- 	elseif not success3 then
-		-- 		warn(`(git-push) Failed to create branch for file {name}: (no data)`)
-		-- 		mySHA = nil
-		-- 	end
-		-- end
+		 --	if success3 and not result3.Success then
+		 --		warn(`(git-push) Failed to create branch for file {name}: `.. result3.Body)
+		 --		mySHA = nil
+		 --	elseif not success3 then
+		 --		warn(`(git-push) Failed to create branch for file {name}: (no data)`)
+		 --		mySHA = nil
+		 --	end
+		 --end
 		-- End of getting backup SHA
+
 
 		-- SHA guard
 		if not mySHA then
@@ -176,46 +181,14 @@ function GitFxns.gitPush(data: Types.GitDirectiveData)
 		-- End of SHA guard
 
 		-- Finally try and push the stuff
-		if fileObject:IsA("BaseScript") then
-			local src: string = fileObject.Source
-			
-			if not src:find("--$MODULE") or src:find("--$SERVER") or src:find("--$CLIENT") then
-				if fileObject:IsA("ModuleScript") then
-					src = `--$MODULE\n{src}`
-					
-				elseif fileObject:IsA("Script") then
-					src = `--$SERVER\n{src}`
-					
-				elseif fileObject:IsA("LocalScript") then
-					src = `--$CLIENT\n{src}`
-					
-				end
-			end
-			
-			local success4, result4 = pcall(function()
-				return HttpService:RequestAsync({
-					Url = url..`/{name}.lua`,
-					Method = "PUT",
-					Headers = headers,
-					Body = HttpService:JSONEncode({
-						message = msg or ((mySHA) and `Updated {name}` or `Created {name}`),
-						content = Functions.to_base64(src),
-						branch = branch,
-						sha = mySHA
-					})
-				})
-			end)
-
-			if success4 and not result4.Success then
-				warn(`(git-push) Failed to push file {name}: `.. result4.Body)
-			elseif not success4 then
-				warn(`(git-push) Failed to push file {name}: (no data)`)
-			end			
+		if Functions.isScript(fileObject) then
+			Functions.pushScript(fileObject, headers, url, msg, branch)
 		end
 
 		if #fileObject:GetChildren() > 0 then
+			--print('pushing container')
 			local myURL = `{url}/{fileObject.Name}`
-
+	
 			Functions.pushContainer(
 				fileObject,
 				headers,
@@ -276,7 +249,8 @@ function GitFxns.gitPull(data: Types.GitDirectiveData)
 			fileObject = game
 			table.remove(split, 1)
 		elseif root == "script" then
-			fileObject = script
+			warn(`(git-push) Do not use relative file paths: (file {name})`)
+			continue
 		elseif game:FindFirstChild(root) then
 			fileObject = game
 		else
@@ -288,7 +262,7 @@ function GitFxns.gitPull(data: Types.GitDirectiveData)
 			fileObject = fileObject:FindFirstChild(t)
 		end
 
-		if not fileObject:IsA("Instance") then
+		if not fileObject then
 			warn(`(git-pull) Invalid parent class for file {name}`)
 			continue
 		end
@@ -301,7 +275,7 @@ function GitFxns.gitPull(data: Types.GitDirectiveData)
 		-- Parent scripts properly after the fact
 		for _, folder in pairs(new_directories) do	
 			for _, v in pairs(folder.Parent:GetChildren()) do
-				if not(v:IsA("BaseScript")) then continue end
+				if not(Functions.isScript(v)) then continue end
 				if v.Name ~= folder.Name then continue end
 
 				for _, item in pairs(folder:GetChildren()) do

@@ -1,7 +1,7 @@
+--$MODULE
+
 --!native
 --!optimize 2
-
---$MODULE
 
 export type GitConfigData = {
 	token: string | nil;
@@ -25,6 +25,12 @@ export type GitDirectiveData = {
 			message: string | nil;
 		}
 	}
+}
+
+export type GitParserData = {
+	config: GitConfigData,
+	pull: GitDirectiveData,
+	push: GitDirectiveData
 }
 
 return {}

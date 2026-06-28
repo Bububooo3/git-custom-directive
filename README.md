@@ -1,37 +1,21 @@
---$MODULE
+# Git Custom Directive
 
-local tokens = {
-    ["[=["] = function()
+## Basic Info
 
-    end
-}
+Using text alone, Roblox programmers are able to version-control their scripts.
 
-function gitParse(raw: string)
-    local lines = raw:split("\n")
-    local bracketStack = {}
-    local data = {}
-    local mode -- 0, 1, 2 -> config, push, pull
+> [!NOTE]
+> The token entry is a hazard, but it's there because this tool/library is part of a larger future plugin (I made this as a favor), which will store the token securely using built-in methods from the plugin library.
 
-    for _, line in pairs(lines) do
-        for _, word: string in pairs(line:split(" ")) do
-            for token, callback in pairs(tokens) do
-                if (word:lower()):find(token, 1, true) then
+<hr>
+<br>
 
-                end
-            end
+## Documentation
 
-            
+> [!TIP]
+> Config can be changed on a global, function, and per-file level. Each missing entry falls back according to the hierarchy. Therefore redundancy is unnecessary.
 
-            if word == "[=[" then
-                table.insert(bracketStack, word)
-                continue
-            end
-
-            mode = ((word=="git-config") and 0) or ((word=="git-push") and 1) or ((word=="git-pull") and 2) or mode
-        end
-    end
-end
-
+```lua
 --[[
 	[=[
 		git-config = [ // This is global config (act as back-ups if failure occurs also)
@@ -101,3 +85,5 @@ end
 		];
 	]=]
 ]]
+```
+

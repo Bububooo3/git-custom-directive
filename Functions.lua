@@ -1,7 +1,6 @@
+--$MODULE
 --!native
 --!optimize 2
-
---$MODULE
 
 local HttpService = game:GetService("HttpService")
 local Selection = game:GetService("Selection")
@@ -11,6 +10,11 @@ repeat
 	Keywords = require("./Keywords")
 	task.wait()
 until Keywords ~= nil
+
+function Functions.isScript(instance: Instance)
+	local c = instance.ClassName
+	return c == "Script" or c == "LocalScript" or c == "ModuleScript"
+end
 
 function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
 	local result = object.Name
@@ -24,52 +28,83 @@ function Functions.getFullNameFormatted(object: Instance, limit: Instance?)
 	return result
 end
 
+function Functions.pushScript(object: Instance, headers, url, msg, branch)
+	--print(`pushScript called for {object.Name}`)
+	
+	local src: string = object.Source
+	local name = object.Name
+	local mySHA
+	
+	-- Get SHA
+	local success1, result = pcall(function()
+		return HttpService:RequestAsync({
+			Url = url..`/{object.Name}.lua?ref={branch}`,
+			Method = "GET",
+			Headers = headers
+		})
+	end)
+
+	if success1 and result.Success then
+		local temp = HttpService:JSONDecode(result.Body)
+		mySHA = temp.sha
+	end
+	-- End of getting SHA
+
+	-- SHA guard
+	if not mySHA then
+		warn(`(git-push) Unable to obtain remote SHA for file {object.Name}`)
+	end
+	-- End of SHA guard
+
+	if not src:find("--$MODULE") or src:find("--$SERVER") or src:find("--$CLIENT") then
+		if object:IsA("ModuleScript") then
+			src = `--$MODULE\n{src}`
+
+		elseif object:IsA("Script") then
+			src = `--$SERVER\n{src}`
+
+		elseif object:IsA("LocalScript") then
+			src = `--$CLIENT\n{src}`
+
+		end
+	end
+
+	local success4, result4 = pcall(function()
+		return HttpService:RequestAsync({
+			Url = url..`/{name}.lua`,
+			Method = "PUT",
+			Headers = headers,
+			Body = HttpService:JSONEncode({
+				message = msg or ((mySHA) and `Updated {name}` or `Created {name}`),
+				content = Functions.to_base64(src),
+				branch = branch,
+				sha = mySHA
+			})
+		})
+	end)
+
+	if success4 and result4.Success then
+		--print(`(git-push) Pushed {name} successfully`)
+	elseif success4 and not result4.Success then
+		warn(`(git-push) Failed to push {name}: ` .. result4.Body)
+	elseif not success4 then
+		warn(`(git-push) Failed to push {name}: ` .. tostring(result4)) -- result4 is the error message when pcall fails
+	end	
+
+	--if success4 then
+	--	print(`(git-push) HTTP {result4.StatusCode}: {result4.Body}`)
+	--end
+	
+	--print(`(git-push) pushScript done for {name}`)
+end
+
 function Functions.pushContainer(parent: Instance, headers, url, msg, branch)
-	for _, child in pairs(parent:GetChildren()) do
-		if child:IsA("BaseScript") then
-
-			-- Get SHA
-			local mySHA
-
-			local success1, result = pcall(function()
-				return HttpService:RequestAsync({
-					Url = url..`/{child.Name}.lua?ref={branch}`,
-					Method = "GET",
-					Headers = headers
-				})
-			end)
-
-			if success1 and result.Success then
-				local temp = HttpService:JSONDecode(result.Body)
-				mySHA = temp.sha
-			end
-			-- End of getting SHA
-
-			-- SHA guard
-			if not mySHA then
-				warn(`(git-push) Unable to obtain remote SHA for file {child.Name}`)
-			end
-			-- End of SHA guard
-
-			local success4, result4 = pcall(function()
-				return HttpService:RequestAsync({
-					Url = url..`/{child.Name}.lua`,
-					Method = "PUT",
-					Headers = headers,
-					Body = HttpService:JSONEncode({
-						message = (mySHA) and `Updated file {child.Name} -> ({msg})` or `Created file {child.Name} -> ({msg})`,
-						content = Functions.to_base64(child.Source),
-						branch = branch,
-						sha = mySHA
-					})
-				})
-			end)
-
-			if success4 and not result4.Success then
-				warn(`(git-push) Failed to push file {child.Name} -> ({msg}): `.. result4.Body)
-			elseif not success4 then
-				warn(`(git-push) Failed to push file {child.Name} -> ({msg}): (no data)`)
-			end
+	for _, child in pairs(parent:GetChildren()) do	
+		--print(child, child.ClassName)
+		
+		if Functions.isScript(child) then
+			--print("calling")
+			Functions.pushScript(child, headers, url, msg, branch)		
 		end
 
 		if #child:GetChildren() > 0 then
@@ -139,65 +174,59 @@ function Functions.getRepoContents(repository: string, name: string, path: strin
 	return HttpService:JSONDecode(result1.Body)
 end
 
+local function stripNoise(source: string): string
+	return source
+		:gsub('"[^"\n]*"', '""')       -- remove string contents (keep quotes as spacers)
+		:gsub("'[^'\n]*'", "''")       -- remove single-quoted string contents
+		:gsub("%-%-%[%[.-%]%]", "")    -- remove block comments
+		:gsub("%-%-[^\n]*", "")        -- remove line comments
+end
+
+local function countKeywords(source: string, keywordTable: {string}, typeIndex: number, types: {number})
+	for _, word in ipairs(keywordTable) do
+		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+		local _, count = source:gsub(gSafeWord, "")
+		types[typeIndex] += count
+	end
+end
+
 function Functions.makeFile(myFileData, parent)
 	local sourceCode = Functions.from_base64(myFileData.content)
-
-	local types = {0, 0, 0} -- s, c, m
-
-	for _, word in Keywords.s do
-		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
-		local _, count = string.gsub(sourceCode, gSafeWord, "")
-		types[1] += count
-		
-		if word == "--$SERVER" then
-			count = math.huge
-			break
-		end
-	end
-
-	for _, word in Keywords.c do
-		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
-		local _, count = string.gsub(sourceCode, gSafeWord, "")
-		types[2] += count
-		
-		if word == "--$CLIENT" then
-			count = math.huge
-			break
-		end
-	end
-
-	for _, word in Keywords.m do
-		local gSafeWord = word:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
-		local _, count = string.gsub(sourceCode, gSafeWord, "")
-		types[3] += count
-		
-		if word == "--$MODULE" then
-			count = math.huge
-			break
-		end
-	end
-
 	local scriptInstance
+	local types = {0,0,0}
 	
+	if sourceCode:find("--$MODULE", 1, true) then
+		types[3] = math.huge
+	elseif sourceCode:find("--$SERVER", 1, true) then
+		types[1] = math.huge
+	elseif sourceCode:find("--$CLIENT", 1, true) then
+		types[2] = math.huge
+	else
+		local cleaned = stripNoise(sourceCode)
+		
+		countKeywords(cleaned, Keywords.s, 1, types)
+		countKeywords(cleaned, Keywords.c, 2, types)
+		countKeywords(cleaned, Keywords.m, 3, types)
+	end
+	
+	local className
 	if types[1] > types[2] and types[1] > types[3] then
-		scriptInstance = Instance.new("Script")
-		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		className = "Script"
 		
 	elseif types[2] > types[1] and types[2] > types[3] then
-		scriptInstance = Instance.new("LocalScript")
-		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		className = "LocalScript"
 		
 	elseif types[3] > types[1] and types[3] > types[2] then
-		scriptInstance = Instance.new("ModuleScript")
-		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
+		className = "ModuleScript"
 		
 	else
-		scriptInstance = Instance.new("ModuleScript")
-		scriptInstance.Name = myFileData.name:gsub("%.lua$", ""):gsub("%.luau$", "")
-		warn(`(git-pull) File guessing failed for file {scriptInstance}. Falling back to ClassName: ModuleScript`)
-		warn(`(Server: {types[1]}\n Client: {types[2]}\n Module: {types[3]})`)
+		className = "ModuleScript"
+		warn(`(git-pull) File guessing failed for {myFileData.name}. Falling back to ModuleScript`)
+		warn(`(Server: {types[1]} | Client: {types[2]} | Module: {types[3]})`)
 	end
 
+	scriptInstance = Instance.new(className)
+	scriptInstance.Name = myFileData.name:gsub("%.lua[u]?$", "")
 	scriptInstance.Source = sourceCode
 	scriptInstance.Parent = parent
 	Selection:Set({scriptInstance})
@@ -220,7 +249,7 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 			-- It's not a lua or luau file
 		end
 	elseif contents[1] and (contents[1].type == "dir" or contents[1].type == "file") then -- it's a directory
-		for _, fileData in pairs(contents) do
+		for _, fileData in pairs(contents) do			
 			if fileData.type == "file" and (fileData.name:match("%.lua$") or fileData.name:match("%.luau$")) and fileData and fileData.content then
 				Functions.makeFile(fileData, parent)
 
@@ -252,7 +281,7 @@ function Functions.createStructure(parent: any, repository, name, filePath, head
 
 				table.clear(add)
 			else
-				warn(`(git-pull) Invalid file type for file {name}`)
+				warn(`(git-pull) Invalid file type for file {fileData.name or fileData.path or "(UNKNOWN)"}`)
 				continue
 			end
 		end
