@@ -11,6 +11,32 @@ Using text alone, Roblox programmers are able to version-control their scripts.
 <hr>
 <br>
 
+## Files
+
+### [Functions.lua](Functions.lua)
+The nitty-gritty "backend" functions used by `GitFxns` for easier reading.
+
+### [GitFxns.lua](GitFxns.lua)
+The push, pull, config, mechanisms defined as functions to take input directly from the parser.
+
+### [Keywords.lua](Keywords.lua)
+A dictionary of words associated with each script class for informed estimates when no explcit indicator (`--$MODULE`, `--$SERVER`, `--$CLIENT`) is available.
+
+### [Parser.lua](Parser.lua)
+A parser generated using Claude Sonnet to implement my schema design.
+
+### [Public.lua](Public.lua)
+A public-facing module with a method that takes a script as an argument and runs the application.
+
+### [Test.lua](Test.lua)
+A script with an example schema used to test the application.
+
+### [Types.lua](Types.lua)
+A module with types to make programming the application simpler, since normal Lua is dynamically typed. 
+
+<hr>
+<br>
+
 ## Documentation
 
 > [!TIP]
