@@ -7,7 +7,7 @@ Using text alone, Roblox programmers are able to version-control their scripts.
 To run, make sure all the scripts are pointing to each other correctly (they all need to have the same parent. ignore notes and .devcontainer) and then run this in Roblox's CLI:
 
 ```lua
-Public.run( SCHEMA SCRIPT LOCATION )
+Public.run( SCHEMA SCRIPT LOCATION ) -- (Public refers to the ModuleScript with the name)
 ```
 
 > [!NOTE]
