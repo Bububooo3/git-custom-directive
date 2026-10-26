@@ -2,7 +2,7 @@
 --[[
 [=[
     git-config = [
-        token: "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";
+        token: "not-a-real-token";
         repository: "Bububooo3/git-custom-directive";
         // branch: "test"; <-- (doesn't make new branches. Will throw warning and quit. Will not revert to main bc that's dangerous)
         branch: "main";
